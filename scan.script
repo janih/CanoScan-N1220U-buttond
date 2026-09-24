@@ -1,0 +1,39 @@
+#!/bin/sh
+# Action script for canoscan-n1220u-buttond: scans a page via SANE and saves
+# it to ~/Desktop/Scans, with a macOS notification on success/failure.
+#
+# Invoked with SCANBD_DEVICE and SCANBD_ACTION set (see conf/scanbd.conf's
+# "environment" section for the convention this follows). The daemon
+# releases the scanner's USB interface before running this script and
+# reclaims it afterwards, so it's safe for this script to talk to the
+# scanner itself (e.g. via scanimage) without a "device busy" conflict.
+
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+
+OUTDIR="$HOME/Desktop/Scans"
+mkdir -p "$OUTDIR"
+OUTFILE="$OUTDIR/scan-$(date +%Y%m%d-%H%M%S).png"
+
+# Resolve the plustek device name dynamically: libusb bus/device numbers
+# (e.g. libusb:000:001) can change across replugs/reboots.
+DEVICE=$(scanimage -L 2>/dev/null | sed -n "s/^device \`\(plustek:[^']*\)'.*/\1/p" | head -n1)
+
+# -l/-t 0 with -x/-y set to A4's size (210x297mm, within this scanner's
+# max area of 215x297mm) scans the full page. SANE's own default area is
+# much smaller (roughly 103x76mm), which is why an unscoped scanimage call
+# only captures a small corner of the page.
+if [ -n "$DEVICE" ]; then
+	scanimage -d "$DEVICE" --mode Color --resolution 300 -l 0 -t 0 -x 210 -y 297 --format=png -o "$OUTFILE"
+else
+	scanimage --mode Color --resolution 300 -l 0 -t 0 -x 210 -y 297 --format=png -o "$OUTFILE"
+fi
+RESULT=$?
+
+if [ $RESULT -eq 0 ] && [ -s "$OUTFILE" ]; then
+	logger -t canoscan-n1220u-buttond "scan saved to $OUTFILE"
+	osascript -e "display notification \"Saved $(basename "$OUTFILE")\" with title \"CanoScan N1220U\"" >/dev/null 2>&1
+else
+	logger -t canoscan-n1220u-buttond "scan failed (exit=$RESULT)"
+	osascript -e "display notification \"Scan failed (exit $RESULT)\" with title \"CanoScan N1220U\"" >/dev/null 2>&1
+	rm -f "$OUTFILE"
+fi
