@@ -7,6 +7,8 @@
 // libusbi.c), a GPLv2+ Linux scanner-button daemon:
 // https://github.com/mdengler/scanbd
 //
+// Copyright (C) 2025 Jani Halinen
+//
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License as
 // published by the Free Software Foundation; either version 2 of the

@@ -11,7 +11,18 @@ The button-read protocol (the 4-byte query command and status bitmask) and
 the libusb interface/endpoint discovery pattern are ported from the
 "Plustek USB" scanbuttond backend of [scanbd](https://github.com/mdengler/scanbd),
 a GPLv2+ Linux scanner-button daemon (`plustek.c` and `libusbi.c`). This
-code is released under the same license (GPLv2 or later).
+code is released under the same license (GPLv2 or later). See
+[LICENSE](LICENSE).
+
+## License
+
+Copyright (c) 2025 Jani Halinen
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 2 of the License, or (at your
+option) any later version — the same license as the scanbd project this
+code was ported from. The full license text is in [LICENSE](LICENSE).
 
 ## How it works
 

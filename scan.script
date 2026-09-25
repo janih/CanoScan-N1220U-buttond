@@ -1,6 +1,7 @@
 #!/bin/sh
 # Action script for canoscan-n1220u-buttond: scans a page via SANE and saves
 # it to ~/Desktop/Scans, with a macOS notification on success/failure.
+# Part of canoscan-n1220u-buttond: GPLv2-or-later, see the LICENSE file.
 #
 # Invoked with SCANBD_DEVICE and SCANBD_ACTION set (see conf/scanbd.conf's
 # "environment" section for the convention this follows). The daemon

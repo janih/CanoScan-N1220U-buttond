@@ -1,6 +1,7 @@
 #!/bin/sh
 # Wrapper for launchd: primes the CanoScan N1220U via SANE (see README.md
 # for why this is required) and then execs the button-poll daemon.
+# Part of canoscan-n1220u-buttond: GPLv2-or-later, see the LICENSE file.
 set -e
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
