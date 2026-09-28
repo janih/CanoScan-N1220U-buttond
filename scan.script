@@ -11,6 +11,30 @@
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
 
+# Overrides so the same button can do different jobs. Defaults suit a quick
+# document scan; override from the environment for photos, e.g.
+#   SCAN_DPI=1200 SCAN_MODE=Color ./scan.script
+#   SCAN_MODE=Grayscale ./scan.script   (faster/smaller B&W docs)
+MODE="${SCAN_MODE:-Color}"
+DPI="${SCAN_DPI:-300}"
+# Final desired resolution. The page is scanned at $DPI, then (only if
+# different) Lanczos-resampled down to $TARGET_DPI — scanning high and
+# downsampling reduces aliasing/noise on printed originals. Leave it equal
+# to $DPI (the default) for plain behavior with no resampling. Example:
+#   SCAN_DPI=1200 SCAN_TARGET_DPI=300 ./scan.script
+TARGET_DPI="${SCAN_TARGET_DPI:-$DPI}"
+
+# Both must be positive integers: they feed scanimage and the resample ratio.
+for v in "$DPI" "$TARGET_DPI"; do
+	case "$v" in
+	''|*[!0-9]*|0*)
+		logger -t canoscan-n1220u-buttond "invalid SCAN_DPI/SCAN_TARGET_DPI '$v', expected a positive integer"
+		osascript -e "display notification \"Invalid scan DPI setting: $v\" with title \"CanoScan N1220U\"" >/dev/null 2>&1
+		exit 1
+		;;
+	esac
+done
+
 OUTDIR="$HOME/Desktop/Scans"
 mkdir -p "$OUTDIR"
 OUTFILE="$OUTDIR/scan-$(date +%Y%m%d-%H%M%S).png"
@@ -24,13 +48,40 @@ DEVICE=$(scanimage -L 2>/dev/null | sed -n "s/^device \`\(plustek:[^']*\)'.*/\1/
 # much smaller (roughly 103x76mm), which is why an unscoped scanimage call
 # only captures a small corner of the page.
 if [ -n "$DEVICE" ]; then
-	scanimage -d "$DEVICE" --mode Color --resolution 300 -l 0 -t 0 -x 210 -y 297 --format=png -o "$OUTFILE"
+	scanimage -d "$DEVICE" --mode "$MODE" --resolution "$DPI" -l 0 -t 0 -x 210 -y 297 --format=png -o "$OUTFILE"
 else
-	scanimage --mode Color --resolution 300 -l 0 -t 0 -x 210 -y 297 --format=png -o "$OUTFILE"
+	scanimage --mode "$MODE" --resolution "$DPI" -l 0 -t 0 -x 210 -y 297 --format=png -o "$OUTFILE"
 fi
 RESULT=$?
 
 if [ $RESULT -eq 0 ] && [ -s "$OUTFILE" ]; then
+	# Optional overscan + Lanczos downsampling to $TARGET_DPI. Requires
+	# ImageMagick (magick, or IM6's convert), found via /opt/homebrew/bin
+	# above; if it's missing or fails, the raw scan is kept and logged.
+	if [ "$TARGET_DPI" -gt "$DPI" ]; then
+		logger -t canoscan-n1220u-buttond "SCAN_TARGET_DPI ${TARGET_DPI} > SCAN_DPI ${DPI}: not upsampling, keeping raw ${DPI}dpi scan"
+	elif [ "$TARGET_DPI" -lt "$DPI" ]; then
+		if command -v magick >/dev/null 2>&1; then
+			IM=magick
+		elif command -v convert >/dev/null 2>&1; then
+			IM=convert
+		else
+			IM=
+		fi
+		if [ -n "$IM" ]; then
+			# Exact (non-integer) percentage, e.g. 600->200dpi is 33.333333%.
+			RATIO=$(LC_ALL=C awk "BEGIN { printf \"%.6f\", $TARGET_DPI * 100 / $DPI }")
+			if "$IM" "$OUTFILE" -filter Lanczos -resize "${RATIO}%" -units PixelsPerInch -density "$TARGET_DPI" "PNG:${OUTFILE}.tmp" \
+				&& mv "${OUTFILE}.tmp" "$OUTFILE"; then
+				:
+			else
+				rm -f "${OUTFILE}.tmp"
+				logger -t canoscan-n1220u-buttond "downsample to ${TARGET_DPI}dpi failed, keeping raw ${DPI}dpi scan"
+			fi
+		else
+			logger -t canoscan-n1220u-buttond "downsample to ${TARGET_DPI}dpi skipped: ImageMagick not found, keeping raw ${DPI}dpi scan"
+		fi
+	fi
 	logger -t canoscan-n1220u-buttond "scan saved to $OUTFILE"
 	osascript -e "display notification \"Saved $(basename "$OUTFILE")\" with title \"CanoScan N1220U\"" >/dev/null 2>&1
 else

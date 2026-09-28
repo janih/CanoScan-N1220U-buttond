@@ -107,6 +107,63 @@ script entirely. Either way it receives:
 - `SCANBD_DEVICE` = `canoscan_n1220u`
 - `SCANBD_ACTION` = `scan`
 
+### Overriding resolution and color mode
+
+The default is `Color` at `300` dpi (a good balance for document scans). You
+can override the color mode and resolution from the environment without
+editing the script, so the same button press can do different jobs. The
+N1220U's optical resolution is 1200 × 2400 dpi, so anything up to 1200 dpi
+uses the sensor's native sampling (600 dpi is a good default for photos):
+
+```sh
+SCAN_MODE=Grayscale ./scan.script           # faster, smaller B&W docs
+SCAN_DPI=600 ./scan.script                   # higher detail, ~4x the file size
+SCAN_DPI=1200 SCAN_MODE=Color ./scan.script  # photo-quality scan
+```
+
+Values must be positive integers; anything else is logged and the scan is
+not started. A full A4 page at 1200 dpi in color is roughly 10000 × 14000
+px (hundreds of MB before compression) and slow over the scanner's USB 1.1
+link, so use it only when you need the detail.
+
+The button press runs the same `scan.script`, but with launchd's environment,
+so by default it uses the settings above (Color, 300 dpi). To change what the
+button does, add an `EnvironmentVariables` dict to the launchd plist; the
+daemon passes its environment through to the script:
+
+```xml
+<key>EnvironmentVariables</key>
+<dict>
+	<key>SCAN_DPI</key>
+	<string>600</string>
+	<key>SCAN_TARGET_DPI</key>
+	<string>300</string>
+</dict>
+```
+
+### Scanning high and downsampling
+
+For scanned *printed* material (photos, magazine pages, documents with
+halftone dots), scanning at a higher resolution and then downsampling the
+result tends to look cleaner than a native lower-resolution scan: the
+extra samples reduce aliasing/moiré and sensor noise before the image is
+resized. This is done by scanning at `SCAN_DPI` and then resampling down
+to a lower `SCAN_TARGET_DPI` with ImageMagick's Lanczos filter — the
+default target equals the scan DPI, so there's no resampling unless you
+ask for it:
+
+```sh
+SCAN_DPI=600 SCAN_TARGET_DPI=300 ./scan.script   # 2× overscan, good for prints
+SCAN_DPI=1200 SCAN_TARGET_DPI=300 ./scan.script  # aggressive overscan
+```
+
+The downsample step runs only when `SCAN_TARGET_DPI` is lower than
+`SCAN_DPI` (a higher target is logged and ignored rather than upsampled),
+and only if ImageMagick is installed (`brew install imagemagick`; `magick`
+is used, falling back to IM6's `convert`). If it's missing or the resample
+fails, the raw scan is kept and a note is logged, so you never end up with
+no file.
+
 ## Install as a launchd agent (auto-start)
 
 ```sh
